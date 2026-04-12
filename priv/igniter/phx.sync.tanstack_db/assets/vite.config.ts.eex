@@ -1,0 +1,71 @@
+import { defineConfig, loadEnv } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
+import { phoenixVitePlugin } from 'phoenix_vite'
+
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const isProd = mode === 'production'
+
+  return {
+    server: {
+      port: 5173,
+      strictPort: true,
+      cors: { origin: "http://localhost:4000" },
+    },
+    optimizeDeps: {
+      // https://vitejs.dev/guide/dep-pre-bundling#monorepos-and-linked-dependencies
+      include: ["phoenix", "phoenix_html", "phoenix_live_view"],
+    },
+    build: {
+      outDir: "../priv/static",
+      target: ['es2022'],
+      minify: isProd,
+      sourcemap: !isProd,
+      manifest: true,
+      rollupOptions: {
+        input: {
+          liveview: "js/app.js",
+          spa: "js/index.tsx",
+          css: "css/app.css",
+        },
+        output: {
+          assetFileNames: 'assets/[name][extname]',
+          chunkFileNames: 'assets/chunk/[name].js',
+          entryFileNames: 'assets/[name].js',
+        },
+      },
+      emptyOutDir: true,
+    },
+    // LV Colocated JS and Hooks
+    // https://hexdocs.pm/phoenix_live_view/Phoenix.LiveView.ColocatedJS.html#module-internals
+    resolve: {
+      alias: {
+        "@": ".",
+        "phoenix-colocated": `${process.env.MIX_BUILD_PATH}/phoenix-colocated`,
+      },
+    },
+    define: {
+      __APP_ENV__: env.APP_ENV,
+      // Explicitly force production React
+      'process.env.NODE_ENV': JSON.stringify(isProd ? 'production' : 'development'),
+      'import.meta.env.PROD': isProd,
+      'import.meta.env.DEV': !isProd,
+    },
+    plugins: [
+      tanstackRouter({
+        target: 'react',
+        autoCodeSplitting: true,
+        routesDirectory: "./js/routes",
+        generatedRouteTree: "./js/routeTree.gen.ts",
+      }),
+      react(),
+      tailwindcss(),
+      phoenixVitePlugin({
+        pattern: /\.(ex|heex)$/
+      })
+    ]
+  }
+});
