@@ -87,11 +87,6 @@ if Code.ensure_loaded?(Igniter) do
 
     @impl Igniter.Mix.Task
     def igniter(igniter) do
-      project = PhoenixSyncFix.MixProject.project() # Puedo usar MixProject.project() sin problemas
-      IO.puts(String.duplicate("*", 130))
-      IO.inspect(project, label: "project")
-      IO.puts(String.duplicate("*", 130))
-      
       {:ok, mode} = Keyword.fetch(igniter.args.options, :sync_mode)
 
       if mode not in @valid_modes do
