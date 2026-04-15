@@ -4,7 +4,18 @@
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
+### Igniter
+
+```sh
+# Fresh project
+mix igniter.new my_app --with phx.new --install phoenix_sync_fix --sync-mode embedded
+# Existing project
+mix igniter.install phoenix_sync_fix --sync-mode embedded
+```
+
+### Manual
+
+The package can be installed
 by adding `phoenix_sync_fix` to your list of dependencies in `mix.exs`:
 
 ```elixir
@@ -15,7 +26,9 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/phoenix_sync_fix>.
+Then:
 
+```sh
+mix deps.get
+mix phoenix_sync_fix.install --sync-mode embedded
+```
