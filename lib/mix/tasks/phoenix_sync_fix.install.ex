@@ -316,41 +316,13 @@ if Code.ensure_loaded?(Igniter) do
         {:code, quote(do: config_env())}
       )
     end
+    
+    @electric_version ">= 1.1.9 and <= 1.1.10"
 
     defp required_electric_version do
-      with {:ok, _vsn} <- Application.ensure_loaded(:phoenix_sync),
-           deps when is_list(deps) <- phoenix_sync_deps() do
-        case Enum.find(deps, &match?({:electric, _, _}, &1)) do
-          {:electric, requirement, _opts} -> requirement
-          {:electric, requirement} -> requirement
-          _ -> default_requirement()
-        end
-      else
-        _ -> default_requirement()
-      end
+      @electric_version
     end
     
-    defp phoenix_sync_deps do
-      case Application.spec(:phoenix_sync, :modules) do
-        nil ->
-          []
-    
-        _ ->
-          case :code.which(Phoenix.Sync.MixProject) do
-            :non_existing ->
-              []
-    
-            _ ->
-              Phoenix.Sync.MixProject.project()
-              |> Keyword.get(:deps, [])
-          end
-      end
-    end
-    
-    defp default_requirement do
-      ">= 1.1.9 and <= 1.1.10"
-    end
-
     defp find_repo(igniter) do
       case Igniter.Libs.Ecto.select_repo(igniter) do
         {igniter, nil} ->
