@@ -206,7 +206,7 @@ if Code.ensure_loaded?(Igniter) do
             'import.meta.env.DEV': !isProd,
           },
           plugins: [
-      #{plugins |> Enum.map(&("      " <> &1)) |> Enum.join(",\n")}
+#{plugins |> Enum.map(&indent_multiline(&1, 6)) |> Enum.join(",\n")}
           ]
         }
       });
@@ -275,11 +275,11 @@ if Code.ensure_loaded?(Igniter) do
       [
         """
         tanstackRouter({
-              target: 'react',
-              autoCodeSplitting: true,
-              routesDirectory: "./js/routes",
-              generatedRouteTree: "./js/routeTree.gen.ts",
-            })
+          target: 'react',
+          autoCodeSplitting: true,
+          routesDirectory: "./js/routes",
+          generatedRouteTree: "./js/routeTree.gen.ts",
+        })
         """
         |> String.trim(),
         "react()",
@@ -304,10 +304,18 @@ if Code.ensure_loaded?(Igniter) do
     defp phoenix_vite_plugin_call do
       """
       phoenixVitePlugin({
-            pattern: /\\.(ex|heex)$/
-          })
+        pattern: /\\.(ex|heex)$/
+      })
       """
       |> String.trim()
+    end
+
+    defp indent_multiline(text, spaces) do
+      prefix = String.duplicate(" ", spaces)
+
+      text
+      |> String.split("\n")
+      |> Enum.map_join("\n", fn line -> prefix <> line end)
     end
   end
 end
