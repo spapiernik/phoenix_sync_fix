@@ -33,7 +33,7 @@ if Code.ensure_loaded?(Igniter) do
         group: :phoenix_sync_fix,
         installs: [],
         schema: [framework: :string, preset: :string, bundler: :string, bun: :boolean, inertia: :boolean],
-        defaults: [framework: nil, preset: :string, bundler: nil, bun: false, inertia: false],
+        defaults: [framework: nil, preset: nil, bundler: nil, bun: false, inertia: false],
         composes: [],
         extra_args?: true
       }
