@@ -84,18 +84,6 @@ if Code.ensure_loaded?(Igniter) do
         required: []
       }
     end
-    
-    def app_name(igniter) do
-      Igniter.Project.Application.app_name(igniter)
-    end
-    
-    def web_module(igniter) do
-      Igniter.Libs.Phoenix.web_module(igniter)
-    end
-    
-    def web_dir(igniter) do
-      "lib/#{app_name(igniter)}_web"
-    end
 
     @impl Igniter.Mix.Task
     def igniter(igniter) do
@@ -119,6 +107,18 @@ if Code.ensure_loaded?(Igniter) do
       # |> remove_esbuild()
       # |> add_ingest_flow()
       # |> run_assets_setup()
+    end    
+
+    defp app_name(igniter) do
+      Igniter.Project.Application.app_name(igniter)
+    end
+    
+    defp web_module(igniter) do
+      Igniter.Libs.Phoenix.web_module(igniter)
+    end
+    
+    defp web_dir(igniter) do
+      "lib/#{app_name(igniter)}_web"
     end
 
     defp add_ingest_flow(igniter) do
