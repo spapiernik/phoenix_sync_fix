@@ -156,8 +156,8 @@ if Code.ensure_loaded?(Igniter) do
               "Which bundler would you like to use?",
               ["vite", "esbuild"],
               display: fn
-                "vite" -> "Vite"
-                "esbuild" -> "esbuild (Phoenix default)"
+                "vite" -> bundler_display_name("vite")
+                "esbuild" -> "#{bundler_display_name("esbuild")} (Phoenix default)"
               end,
               default: "vite"
             )
@@ -253,16 +253,16 @@ if Code.ensure_loaded?(Igniter) do
       |> PackageJson.create_package_json(bundler, framework, preset)
       |> Framework.create_index_page(framework, preset)
       |> Framework.update_tsconfig(framework, preset, bundler)
-      # |> setup_bundler(app_name, bundler, use_bun, framework)
-      # |> Layout.create_spa_root_layout(web_module, bundler, framework)
-      # |> Layout.create_or_update_page_controller(web_module,
-      #   use_spa_layout: bundler in ["vite", "esbuild"]
-      # )
+      |> setup_bundler(app_name, bundler, use_bun, framework, preset)
+      |> Layout.create_spa_root_layout(web_module, bundler, framework, preset)
+      |> Layout.create_or_update_page_controller(web_module,
+        use_spa_layout: bundler in ["vite", "esbuild"]
+      )
       # |> Layout.create_index_template(web_module, bundler, framework)
       # |> Layout.add_page_index_route(web_module)
     end
 
-    defp setup_bundler(igniter, app_name, "esbuild", use_bun, framework)
+    defp setup_bundler(igniter, app_name, "esbuild", use_bun, framework, _preset)
          when framework in ["vue", "svelte", "solid"] do
       igniter
       |> Esbuild.create_esbuild_script(framework)
@@ -270,14 +270,14 @@ if Code.ensure_loaded?(Igniter) do
       |> Esbuild.update_root_layout_for_esbuild()
     end
 
-    defp setup_bundler(igniter, app_name, "esbuild", use_bun, framework) do
+    defp setup_bundler(igniter, app_name, "esbuild", use_bun, framework, _preset) do
       igniter
       |> Esbuild.update_esbuild_config(app_name, use_bun, framework)
       |> Esbuild.update_root_layout_for_esbuild()
     end
 
-    defp setup_bundler(igniter, _app_name, "vite", _use_bun, framework) do
-      Vite.update_vite_config_with_framework(igniter, framework)
+    defp setup_bundler(igniter, _app_name, "vite", _use_bun, framework, preset) do
+      Vite.update_vite_config_with_framework(igniter, framework, preset)
     end
 
     defp setup_bundler(igniter, _app_name, _bundler, _use_bun, _framework), do: igniter
@@ -487,10 +487,11 @@ if Code.ensure_loaded?(Igniter) do
     defp framework_display_name("solid"), do: "SolidJS"
     defp framework_display_name(other), do: other
     
-    defp preset_display_name("tanstack_db"), do: "TanstackDB"
+    defp preset_display_name("tanstack_db"), do: "TanStack DB"
     defp preset_display_name(other), do: other
     
     defp bundler_display_name("vite"), do: "Vite"
+    defp bundler_display_name("esbuild"), do: "ESBuild"
     defp bundler_display_name(other), do: other
   end
 else
