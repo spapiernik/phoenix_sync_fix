@@ -14,6 +14,7 @@ if Code.ensure_loaded?(Igniter) do
     def create_package_json(igniter, "vite", framework, preset) do
       igniter
       |> Igniter.create_or_update_file("assets/package.json", "{}\n", fn source -> source end)
+      |> add_package_metadata_and_scripts("vite")
       |> add_framework_deps(framework, "vite")
       |> add_preset_deps(preset, framework, "vite")
     end
@@ -34,6 +35,7 @@ if Code.ensure_loaded?(Igniter) do
       |> Igniter.create_or_update_file("assets/package.json", base_package_json, fn source ->
         source
       end)
+      |> add_package_metadata_and_scripts("esbuild")
       |> add_framework_deps(framework, "esbuild")
       |> add_preset_deps(preset, framework, "esbuild")
       |> update_vendor_imports()
@@ -72,7 +74,10 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     def encode_pretty_json(data) do
-      Jason.encode!(data, pretty: true) <> "\n"
+      data
+      |> ordered_root_entries()
+      |> encode_pretty_ordered_root()
+      |> Kernel.<>("\n")
     end
 
     # -- Private --
@@ -86,6 +91,134 @@ if Code.ensure_loaded?(Igniter) do
         |> merge_package_section("devDependencies", deps.dev_dependencies)
       end)
     end
+
+    defp add_package_metadata_and_scripts(igniter, bundler) do
+      update_package_json(igniter, fn package_json ->
+        app_name = infer_app_name(igniter, package_json)
+
+        package_json
+        |> Map.put_new("name", app_name)
+        |> Map.put_new("version", "0.0.0")
+        |> Map.put_new("type", "module")
+        |> merge_scripts(default_scripts(bundler))
+      end)
+    end
+
+    defp merge_scripts(package_json, scripts_to_add) when is_map(scripts_to_add) do
+      current_scripts = Map.get(package_json, "scripts", %{})
+      Map.put(package_json, "scripts", Map.merge(scripts_to_add, current_scripts))
+    end
+
+    defp default_scripts("vite") do
+      %{
+        "build" => "tsc -b && vite build --mode development",
+        "build:only" => "vite build --mode development",
+        "build:prod" => "vite build --mode production",
+        "dev" => "vite",
+        "format" => "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+        "format:check" => "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+        "lint" => "eslint .",
+        "preview" => "vite preview",
+        "typecheck" => "tsc -b"
+      }
+    end
+
+    defp default_scripts(_bundler) do
+      %{
+        "build" => "tsc -b",
+        "dev" => "mix phx.server",
+        "format" => "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+        "format:check" => "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+        "lint" => "eslint .",
+        "typecheck" => "tsc -b"
+      }
+    end
+
+    defp infer_app_name(igniter, package_json) do
+      Map.get(package_json, "name") || app_name_from_igniter(igniter) || "app"
+    end
+
+    defp app_name_from_igniter(igniter) do
+      cond do
+        is_map(igniter) and Map.has_key?(igniter, :assigns) ->
+          assigns = Map.get(igniter, :assigns, %{})
+
+          cond do
+            is_map(assigns) and is_binary(Map.get(assigns, :app_name)) ->
+              Map.get(assigns, :app_name)
+
+            is_map(assigns) and is_binary(Map.get(assigns, "app_name")) ->
+              Map.get(assigns, "app_name")
+
+            true ->
+              nil
+          end
+
+        true ->
+          nil
+      end
+    end
+
+    defp ordered_root_entries(package_json) when is_map(package_json) do
+      canonical_keys = [
+        "name",
+        "version",
+        "type",
+        "scripts",
+        "dependencies",
+        "devDependencies"
+      ]
+
+      canonical_entries =
+        canonical_keys
+        |> Enum.reduce([], fn key, acc ->
+          case Map.fetch(package_json, key) do
+            {:ok, value} -> [{key, value} | acc]
+            :error -> acc
+          end
+        end)
+        |> Enum.reverse()
+
+      extra_entries =
+        package_json
+        |> Enum.reject(fn {key, _value} -> key in canonical_keys end)
+        |> Enum.sort_by(fn {key, _value} -> key end)
+
+      canonical_entries ++ extra_entries
+    end
+
+    defp ordered_root_entries(other), do: other
+
+    defp encode_pretty_ordered_root(entries) when is_list(entries) do
+      body =
+        entries
+        |> Enum.map(fn {key, value} ->
+          encoded_value =
+            value
+            |> Jason.encode!(pretty: true)
+            |> indent_multiline_json(2)
+
+          "  " <> Jason.encode!(key) <> ": " <> encoded_value
+        end)
+        |> Enum.join(",\n")
+
+      "{\n" <> body <> "\n}"
+    end
+
+    defp indent_multiline_json(json, spaces) when is_binary(json) and is_integer(spaces) and spaces >= 0 do
+      indent = String.duplicate(" ", spaces)
+
+      json
+      |> String.split("\n")
+      |> Enum.with_index()
+      |> Enum.map(fn
+        {line, 0} -> line
+        {line, _idx} -> indent <> line
+      end)
+      |> Enum.join("\n")
+    end
+
+    defp encode_pretty_ordered_root(other), do: Jason.encode!(other, pretty: true)
 
     defp add_preset_deps(igniter, preset, framework, bundler) do
       deps = get_preset_deps(preset, framework, bundler)
