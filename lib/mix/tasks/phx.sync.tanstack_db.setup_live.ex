@@ -431,6 +431,7 @@ if Code.ensure_loaded?(Igniter) do
               content = src.content
 
               ingest_scope = """
+              
   scope "/ingest", #{inspect(web_module)} do
     pipe_through :api
 
