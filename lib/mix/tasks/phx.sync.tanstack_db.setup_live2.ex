@@ -258,7 +258,7 @@ if Code.ensure_loaded?(Igniter) do
       |> Layout.create_or_update_page_controller(web_module,
         use_spa_layout: bundler in ["vite", "esbuild"]
       )
-      # |> Layout.create_index_template(web_module, bundler, framework)
+      |> Layout.create_index_template(web_module, bundler, framework)
       # |> Layout.add_page_index_route(web_module)
     end
 
