@@ -25,7 +25,14 @@ if Code.ensure_loaded?(Igniter) do
 
     use Igniter.Mix.Task
 
-    alias PhoenixSyncFix.Installer.{Esbuild, Framework, Inertia, Layout, PackageJson, Vite}
+    alias PhoenixSyncFix.Installer.{
+      Esbuild,
+      Framework,
+      Inertia,
+      Layout,
+      PackageJson,
+      Vite
+    }
 
     @impl Igniter.Mix.Task
     def info(argv, _source) do
