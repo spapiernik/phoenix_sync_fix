@@ -42,6 +42,8 @@ if Code.ensure_loaded?(Igniter) do
 
     alias PhoenixSynFix.Installer.LandingPage
 
+    @tanstack_template_subdir "igniter/phx.sync.tanstack_db"
+
     @doc "Create the framework's entry point file (index.tsx / index.ts + App component)."
     def create_index_page(igniter, "react", "tanstack_db") do
       content = """
@@ -72,6 +74,7 @@ if Code.ensure_loaded?(Igniter) do
 
       igniter
       |> Igniter.create_new_file("assets/js/index.tsx", content, on_exists: :warning)
+      |> install_tanstack_db_assets()
     end
 
     def create_index_page(igniter, "react", nil) do
@@ -456,5 +459,112 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp deep_merge(_left, right), do: right
+
+    # -- Preset asset installers --
+
+    defp install_tanstack_db_assets(igniter) do
+      sync_mode = detect_phoenix_sync_mode()
+
+      igniter
+      |> copy_file_from_template(
+        template_path("assets/js/api.ts.eex"),
+        "assets/js/api.ts"
+      )
+      |> copy_file_from_template(
+        template_path("assets/js/routeTree.gen.ts.eex"),
+        "assets/js/routeTree.gen.ts"
+      )
+      |> copy_directory_from_template(
+        template_path("assets/js/components"),
+        "assets/js/components"
+      )
+      |> copy_directory_from_template(
+        template_path("assets/js/db"),
+        "assets/js/db"
+      )
+      |> copy_directory_from_template(
+        template_path("assets/js/routes"),
+        "assets/js/routes"
+      )
+      |> copy_compose_yaml(sync_mode)
+    end
+
+    defp detect_phoenix_sync_mode do
+      case Application.get_env(:phoenix_sync, :mode) do
+        :http -> :http
+        :embedded -> :embedded
+        _ -> :embedded
+      end
+    end
+
+    defp copy_compose_yaml(igniter, :http) do
+      app_name = Igniter.Project.Application.app_name(igniter)
+
+      rendered =
+        template_path("compose.http.yaml.eex")
+        |> EEx.eval_file(app_name: app_name)
+
+      Igniter.create_or_update_file(igniter, "compose.yaml", rendered <> "\n", fn _source ->
+        Rewrite.Source.from_string!(rendered <> "\n", "compose.yaml")
+      end)
+    end
+
+    defp copy_compose_yaml(igniter, _mode) do
+      app_name = Igniter.Project.Application.app_name(igniter)
+
+      rendered =
+        template_path("compose.embedded.yaml.eex")
+        |> EEx.eval_file(app_name: app_name)
+
+      Igniter.create_or_update_file(igniter, "compose.yaml", rendered <> "\n", fn _source ->
+        Rewrite.Source.from_string!(rendered <> "\n", "compose.yaml")
+      end)
+    end
+
+    defp copy_file_from_template(igniter, source_path, destination_path) do
+      content = File.read!(source_path)
+
+      Igniter.create_or_update_file(igniter, destination_path, content, fn source ->
+        if source.content == content do
+          source
+        else
+          Rewrite.Source.update(source, :content, content)
+        end
+      end)
+    end
+
+    defp copy_directory_from_template(igniter, source_dir, destination_dir) do
+      source_dir
+      |> list_files_recursively()
+      |> Enum.reduce(igniter, fn source_file, acc ->
+        relative_path = Path.relative_to(source_file, source_dir)
+        destination_path = Path.join(destination_dir, relative_path)
+        copy_file_from_template(acc, source_file, destination_path)
+      end)
+    end
+
+    defp list_files_recursively(dir) do
+      dir
+      |> File.ls!()
+      |> Enum.map(&Path.join(dir, &1))
+      |> Enum.flat_map(fn path ->
+        if File.dir?(path) do
+          list_files_recursively(path)
+        else
+          [path]
+        end
+      end)
+    end
+
+    defp template_path(relative_path) do
+      Path.join([priv_dir!(), @tanstack_template_subdir, relative_path])
+    end
+
+    defp priv_dir! do
+      case :code.priv_dir(:phoenix_sync_fix) do
+        dir when is_list(dir) -> List.to_string(dir)
+        _ -> raise "Could not resolve :phoenix_sync_fix priv directory"
+      end
+    end
   end
 end
