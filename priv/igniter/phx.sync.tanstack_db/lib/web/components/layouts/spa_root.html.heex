@@ -19,7 +19,7 @@ SPDX-License-Identifier: MIT
       </script>
     <% end %>
     <PhoenixVite.Components.assets
-      names={["js/index.tsx", "css/app.css"]}
+      names={["__ENTRY_FILE__", "css/app.css"]}
       manifest={{:__APP_NAME__, "priv/static/.vite/manifest.json"}}
       dev_server={PhoenixVite.Components.has_vite_watcher?(__WEB_MODULE__.Endpoint)}
       to_url={fn p -> static_url(@conn, p) end}

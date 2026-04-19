@@ -1,413 +1,327 @@
-# Adapted from https://github.com/electric-sql/phoenix_sync
-# Licensed under the Apache License 2.0
+# SPDX-FileCopyrightText: 2025 ash_typescript contributors <https://github.com/ash-project/ash_typescript/graphs/contributors>
+# SPDX-FileCopyrightText: 2026 Santiago Papiernik <https://github.com/spapiernik/phoenix_sync_fix/graphs/contributors>
 #
-# Modified
+# SPDX-License-Identifier: MIT
 
 defmodule Mix.Tasks.Phx.Sync.TanstackDb.SetupLive.Docs do
   @moduledoc false
-
+  
   @spec short_doc() :: String.t()
-  def short_doc do
-    "Convert a Phoenix application to use a Vite + Tanstack DB based frontend"
-  end
+  def short_doc(), do: ""
 
   @spec example() :: String.t()
-  def example do
-    "mix phx.sync.tanstack_db.setup_live"
-  end
+  def example(), do: ""
 
   @spec long_doc() :: String.t()
-  def long_doc do
-    """
-    #{short_doc()}
-
-    This is a very invasive task that does the following:
-
-    - Removes `esbuild` with `vite`
-
-    - Adds a `package.json` with the required dependencies for `@tanstack/db`,
-      `@tanstack/router`, `react` and `tailwind`
-
-    - Drops in some example routes, schemas, collections and mutation code
-
-    - Adds `spa_root.html.heex` layout, suitable for a react-based SPA
-
-    For this reason we recommend only running this on a fresh Phoenix project
-    (with `Phoenix.Sync` installed).
-
-    ## Example
-
-    ```sh
-    # install igniter.new
-    mix archive.install hex igniter_new
-
-    # create a new phoenix application and install phoenix_sync in `embedded` mode
-    mix igniter.new my_app --install phoenix_sync_fix --with phx.new --sync-mode embedded --no-sync-sandbox
-
-    # setup my_app to use tanstack db
-    #{example()}
-    ```
-
-    ## Options
-
-    * `--sync-pnpm` - Use `pnpm` as package manager if available (default)
-    * `--no-sync-pnpm` - Use `npm` as package manager even if `pnpm` is installed
-    """
-  end
+  def long_doc(), do: ""
 end
+
 
 if Code.ensure_loaded?(Igniter) do
   defmodule Mix.Tasks.Phx.Sync.TanstackDb.SetupLive do
-    # import Igniter.Project.Application, only: [app_name: 1]
-    # import Igniter.Libs.Phoenix, only: [web_module: 1]
-
     @shortdoc "#{__MODULE__.Docs.short_doc()}"
 
     @moduledoc __MODULE__.Docs.long_doc()
 
     use Igniter.Mix.Task
 
+    alias PhoenixSyncFix.Installer.{
+      Framework,
+      Layout,
+      PackageJson,
+      Vite
+    }
+
     @impl Igniter.Mix.Task
-    def info(_argv, _composing_task) do
+    def info(_argv, _source) do
       %Igniter.Mix.Task.Info{
         group: :phoenix_sync_fix,
-        adds_deps: [],
         installs: [],
-        example: __MODULE__.Docs.example(),
-        positional: [],
+        schema: [],
+        defaults: [],
         composes: [],
-        schema: [sync_pnpm: :boolean],
-        defaults: [
-          sync_pnpm: true
-        ],
-        aliases: [],
-        required: []
+        extra_args?: true
       }
     end
 
     @impl Igniter.Mix.Task
     def igniter(igniter) do
-      igniter
-      # |> Igniter.compose_task("igniter.install", ["phoenix_vite"])
-      |> Igniter.compose_task(
-        "igniter.install",
-        ["ash_typescript", "--bundler", "vite", "--yes"]
-      )
-      |> Igniter.compose_task(
-        "igniter.install",
-        ["phoenix_sync_fix@path:../phoenix_sync_fix", "--sync-mode", "embedded", "--no-sync-sandbox"]
-      )
-      |> configure_package_manager()
-      |> install_assets()
-      # |> configure_watchers()
-      # |> add_task_aliases()
-      # |> write_layout()
-      # |> define_routes()
-      # |> add_caddy_file()
-      # |> remove_esbuild()
-      # |> add_ingest_flow()
-      # |> run_assets_setup()
-    end    
+      app_name = Igniter.Project.Application.app_name(igniter)
+      web_module = Igniter.Libs.Phoenix.web_module(igniter)
+      
+      framework = "react"
+      preset = "tanstack_db"
+      bundler = "vite"
+      use_bun = true
 
-    defp app_name(igniter) do
-      Igniter.Project.Application.app_name(igniter)
-    end
-    
-    defp web_module(igniter) do
-      Igniter.Libs.Phoenix.web_module(igniter)
-    end
-    
-    defp web_dir(igniter) do
-      "lib/#{app_name(igniter)}_web"
-    end
+      # Validate
+      igniter = Framework.validate_framework(igniter, framework)
+      igniter = Framework.validate_preset(igniter, preset)
+      igniter = Framework.validate_bundler(igniter, bundler)
+      igniter = validate_tanstack_db_constraints(igniter, framework, bundler, preset)
 
-    defp add_ingest_flow(igniter) do
-      alias Igniter.Libs.Phoenix
-
-      web_module = Phoenix.web_module(igniter)
-      {igniter, router} = Igniter.Libs.Phoenix.select_router(igniter)
-
-      igniter
-      |> Phoenix.add_scope(
-        "/ingest",
-        """
-        pipe_through :api
-
-        # example router for accepting optimistic writes from the client
-        # See: https://tanstack.com/db/latest/docs/overview#making-optimistic-mutations
-        # post "/mutations", Controllers.IngestController, :ingest
-        """,
-        arg2: web_module,
-        router: router,
-        placement: :after
-      )
-      # phoenix doesn't generally namespace controllers under Web.Controllers
-      # but igniter ignores my path here and puts the final file in the location
-      # defined by the module name conventions
-      |> Igniter.create_new_file(
-        "lib/#{Macro.underscore(web_module)}/controllers/ingest_controller.ex",
-        """
-        defmodule #{inspect(Module.concat([web_module, Controllers, IngestController]))} do
-          use #{web_module}, :controller
-
-          # See https://hexdocs.pm/phoenix_sync/readme.html#write-path-sync
-
-          # alias Phoenix.Sync.Writer
-
-          # def ingest(%{assigns: %{current_user: user}} = conn, %{"mutations" => mutations}) do
-          #   {:ok, txid, _changes} =
-          #     Writer.new()
-          #     |> Writer.allow(
-          #       Todos.Todo,
-          #       accept: [:insert],
-          #       check: &Ingest.check_event(&1, user)
-          #     )
-          #     |> Writer.apply(mutations, Repo, format: Writer.Format.TanstackDB)
-          #
-          #   json(conn, %{txid: txid})
-          # end
-        end
-        """
-      )
-    end
-
-    defp add_caddy_file(igniter) do
-      igniter
-      |> create_or_replace_file("Caddyfile")
-    end
-
-    defp define_routes(igniter) do
-      {igniter, router} = Igniter.Libs.Phoenix.select_router(igniter)
-
-      igniter
-      |> Igniter.Project.Module.find_and_update_module!(
-        router,
-        fn zipper ->
-          with {:ok, zipper} <-
-                 Igniter.Code.Function.move_to_function_call(
-                   zipper,
-                   :get,
-                   3,
-                   fn function_call ->
-                     Igniter.Code.Function.argument_equals?(function_call, 0, "/") &&
-                       Igniter.Code.Function.argument_equals?(function_call, 1, PageController) &&
-                       Igniter.Code.Function.argument_equals?(function_call, 2, :home)
-                   end
-                 ),
-               {:ok, zipper} <-
-                 Igniter.Code.Function.update_nth_argument(zipper, 0, fn zipper ->
-                   {:ok,
-                    Igniter.Code.Common.replace_code(
-                      zipper,
-                      Sourceror.parse_string!(~s|"/*page"|)
-                    )}
-                 end),
-               zipper <-
-                 Igniter.Code.Common.add_comment(
-                   zipper,
-                   "Forward all routes onto the root layout since tanstack router does our routing",
-                   []
-                 ) do
-            {:ok, zipper}
-          end
-        end
-      )
-    end
-
-    defp run_assets_setup(igniter) do
-      if igniter.assigns[:test_mode?] do
+      # Core setup (always runs)
+      igniter =
         igniter
-      else
-        Igniter.add_task(igniter, "assets.setup")
+        |> Igniter.Project.IgniterConfig.add_extension(Igniter.Extensions.Phoenix)
+        |> maybe_add_caddyfile(preset)
+        |> maybe_add_ingest_flow(preset, web_module)
+        |> Vite.maybe_fix_runtime_manifest_cache(bundler, app_name)
+
+      # Framework-specific setup
+      igniter =
+        setup_framework(igniter, app_name, web_module, framework, preset, bundler, use_bun)
+
+      # Finalize
+      igniter = Igniter.add_task(igniter, "assets.setup")
+      igniter
+    end
+
+    defp validate_tanstack_db_constraints(igniter, framework, bundler, preset) do
+      use_tanstack_db = preset == "tanstack_db"
+      supported_frameworks = ["react"]
+      
+      cond do
+        use_tanstack_db and is_nil(framework) ->
+          Igniter.add_issue(igniter, "Tanstack DB requires a framework to be specified.")
+
+        use_tanstack_db and framework not in supported_frameworks ->
+          Igniter.add_issue(igniter, "#{String.capitalize(framework)} is not currently supported with Tanstack DB.")
+
+        use_tanstack_db and bundler != "vite" ->
+          Igniter.add_issue(igniter, "Tanstack DB currently only supports vite.")
+
+        true ->
+          igniter
       end
     end
 
-    defp write_layout(igniter) do
+    # -- Framework dispatch --
+
+    defp setup_framework(igniter, app_name, web_module, framework, preset, bundler, use_bun) do
       igniter
-      |> create_or_replace_file(
-        "lib/#{app_name(igniter)}_web/components/layouts/root.html.heex",
-        "lib/web/components/layouts/root.html.heex"
+      |> PackageJson.create_package_json(bundler, framework, preset)
+      |> Framework.create_index_page(framework, preset)
+      |> Framework.update_tsconfig(framework, preset, bundler)
+      |> setup_bundler(app_name, bundler, use_bun, framework, preset)
+      |> Layout.create_spa_root_layout(web_module, bundler, framework, preset)
+      |> Layout.create_or_update_page_controller(web_module,
+        use_spa_layout: true
       )
+      |> Layout.create_index_template(web_module, bundler, framework)
+      |> maybe_update_router_for_tanstack_db(preset, web_module)
     end
 
-    defp remove_esbuild(igniter) do
-      igniter
-      |> Igniter.add_task("deps.unlock", ["tailwind", "esbuild"])
-      |> Igniter.add_task("deps.clean", ["tailwind", "esbuild"])
-      |> Igniter.Project.Deps.remove_dep(:esbuild)
-      |> Igniter.Project.Deps.remove_dep(:tailwind)
-      |> Igniter.Project.Config.remove_application_configuration("config.exs", :esbuild)
-      |> Igniter.Project.Config.remove_application_configuration("config.exs", :tailwind)
+    defp setup_bundler(igniter, _app_name, "vite", _use_bun, framework, preset) do
+      Vite.update_vite_config_with_framework(igniter, framework, preset)
     end
 
-    defp add_task_aliases(igniter) do
-      igniter
-      |> set_alias(
-        "assets.setup",
-        "cmd --cd assets #{package_manager(igniter)} install --ignore-workspace"
-      )
-      |> set_alias(
-        "assets.build",
-        [
-          "compile",
-          "cmd --cd assets #{js_runner(igniter)} vite build --config vite.config.js --mode development"
-        ]
-      )
-      |> set_alias(
-        "assets.deploy",
-        [
-          "cmd --cd assets #{js_runner(igniter)} vite build --config vite.config.js --mode production",
-          "phx.digest"
-        ]
-      )
-    end
+    defp maybe_update_router_for_tanstack_db(igniter, "tanstack_db", web_module) do
+      {igniter, router_module} = Igniter.Libs.Phoenix.select_router(igniter)
 
-    defp set_alias(igniter, task_name, command) do
-      igniter
-      |> Igniter.Project.TaskAliases.modify_existing_alias(
-        task_name,
-        fn zipper ->
-          Igniter.Code.Common.replace_code(zipper, quote(do: [unquote(command)]))
-        end
-      )
-    end
+      case Igniter.Project.Module.find_module(igniter, router_module) do
+        {:ok, {igniter, source, _zipper}} ->
+          router_path = Rewrite.Source.get(source, :path)
 
-    defp configure_watchers(igniter) do
-      config =
-        Sourceror.parse_string!("""
-        [
-        #{js_runner(igniter)}: [
-           "vite",
-           "build",
-           "--config",
-           "vite.config.js",
-           "--mode",
-           "development",
-           "--watch",
-           cd: Path.expand("../assets", __DIR__)
-         ]
-        ]
-        """)
-
-      case Igniter.Libs.Phoenix.select_endpoint(igniter) do
-        {igniter, nil} ->
           igniter
+          |> ensure_lv_route(router_path, web_module)
+          |> ensure_catch_all_route_at_end(router_path, web_module)
 
-        {igniter, module} ->
-          igniter
-          |> Igniter.Project.Config.configure(
-            "dev.exs",
-            app_name(igniter),
-            [module, :watchers],
-            {:code, config}
+        {:error, igniter} ->
+          Igniter.add_warning(
+            igniter,
+            "Could not find router. Please manually update routes for TanStack DB setup."
           )
       end
     end
 
-    defp configure_package_manager(igniter) do
-      if System.find_executable("pnpm") && Keyword.get(igniter.args.options, :sync_pnpm, true) do
-        igniter
-        |> Igniter.add_notice("Using pnpm as package manager")
-        |> Igniter.assign(:package_manager, :pnpm)
-      else
-        if System.find_executable("npm") do
-          igniter
-          |> Igniter.add_notice("Using npm as package manager")
-          |> Igniter.assign(:package_manager, :npm)
+    defp ensure_lv_route(igniter, router_path, web_module) do
+      Igniter.update_file(igniter, router_path, fn source ->
+        content = source.content
+
+        updated =
+          cond do
+            String.contains?(content, "get \"/lv\", PageController, :home") ->
+              content
+
+            String.contains?(content, "get \"/\", PageController, :home") ->
+              String.replace(
+                content,
+                "get \"/\", PageController, :home",
+                "get \"/lv\", PageController, :home"
+              )
+
+            true ->
+              insert_scope_before_router_end(
+                content,
+                """
+                  scope "/", #{inspect(web_module)} do
+                    pipe_through :browser
+
+                    get "/lv", PageController, :home
+                  end
+                """
+              )
+          end
+
+        if updated == content do
+          source
         else
-          igniter
-          |> Igniter.add_issue("Cannot find suitable package manager: please install pnpm or npm")
+          Rewrite.Source.update(source, :content, updated)
         end
+      end)
+    end
+
+    defp ensure_catch_all_route_at_end(igniter, router_path, web_module) do
+      Igniter.update_file(igniter, router_path, fn source ->
+        content = source.content
+
+        catch_all_line = ~s|get "/*page", PageController, :index|
+
+        content_without_existing_catch_all =
+          String.replace(
+            content,
+            ~r/\n[ \t]*get "\/\*page", PageController, :index[ \t]*\n?/,
+            "\n"
+          )
+
+        updated =
+          if String.contains?(content, catch_all_line) or
+               String.contains?(content_without_existing_catch_all, ~s|scope "/", #{inspect(web_module)} do|) do
+            insert_scope_before_router_end(
+              content_without_existing_catch_all,
+              """
+  scope "/", #{inspect(web_module)} do
+    pipe_through :browser
+    
+    # Forward all routes onto the root layout since tanstack router does our routing
+    get "/*page", PageController, :index
+  end
+"""
+            )
+          else
+            content
+          end
+
+        if updated == content do
+          source
+        else
+          Rewrite.Source.update(source, :content, updated)
+        end
+      end)
+    end
+
+    defp insert_scope_before_router_end(content, scope_block) do
+      normalized_scope = String.trim_trailing(scope_block)
+
+      String.replace(content, ~r/\n+\s*end\s*$/, "\n\n" <> normalized_scope <> "\nend\n")
+    end
+
+    defp maybe_add_caddyfile(igniter, "tanstack_db") do
+      rendered =
+        :phoenix_sync_fix
+        |> :code.priv_dir()
+        |> Path.join("igniter/phx.sync.tanstack_db/Caddyfile.eex")
+        |> EEx.eval_file([])
+
+      Igniter.create_or_update_file(igniter, "Caddyfile", rendered <> "\n", fn source ->
+        if source.content == rendered <> "\n" do
+          source
+        else
+          Rewrite.Source.update(source, :content, rendered <> "\n")
+        end
+      end)
+    end
+
+    defp maybe_add_caddyfile(igniter, _preset), do: igniter
+
+    defp maybe_add_ingest_flow(igniter, "tanstack_db", web_module) do
+      igniter
+      |> add_ingest_scope(web_module)
+      |> create_ingest_controller(web_module)
+    end
+
+    defp maybe_add_ingest_flow(igniter, _preset, _web_module), do: igniter
+
+    defp add_ingest_scope(igniter, web_module) do
+      {igniter, router_module} = Igniter.Libs.Phoenix.select_router(igniter)
+
+      case Igniter.Project.Module.find_module(igniter, router_module) do
+        {:ok, {igniter, source, _zipper}} ->
+          router_content = Rewrite.Source.get(source, :content)
+
+          if String.contains?(router_content, "scope \"/ingest\"") do
+            igniter
+          else
+            Igniter.update_file(igniter, Rewrite.Source.get(source, :path), fn src ->
+              content = src.content
+
+              ingest_scope = """
+              
+  scope "/ingest", #{inspect(web_module)} do
+    pipe_through :api
+
+    # example router for accepting optimistic writes from the client
+    # See: https://tanstack.com/db/latest/docs/overview#making-optimistic-mutations
+    # post "/mutations", Controllers.IngestController, :ingest
+  end
+"""
+
+              updated =
+                if String.contains?(content, ~s|scope "/ingest"|) do
+                  content
+                else
+                  String.replace(content, ~r/\nend\s*$/, "\n" <> ingest_scope <> "end\n")
+                end
+
+              if updated == content do
+                src
+              else
+                Rewrite.Source.update(src, :content, updated)
+              end
+            end)
+          end
+
+        {:error, igniter} ->
+          Igniter.add_warning(
+            igniter,
+            "Could not find router. Please manually add the /ingest scope for TanStack DB."
+          )
       end
     end
 
-    defp install_assets(igniter) do
-      igniter
-      # |> Igniter.create_or_update_file(
-      #   "assets/package.json",
-      #   render_template(igniter, "assets/package.json"),
-      #   fn src ->
-      #     Rewrite.Source.update(src, :content, fn _content ->
-      #       render_template(igniter, "assets/package.json")
-      #     end)
-      #   end
-      # )
-      |> create_or_replace_file("assets/package.json")
-      # |> create_or_replace_file("assets/pnpm-lock.yaml")
-      |> create_new_file("assets/vite.config.ts")
-      |> create_new_file("assets/tsconfig.node.json")
-      |> create_new_file("assets/tsconfig.app.json")
-      |> create_or_replace_file("assets/tsconfig.json")
-      # |> create_or_replace_file("assets/tailwind.config.js")
-      |> create_new_file("assets/js/db/collections.ts")
-      |> create_new_file("assets/js/db/schema.ts")
-      |> create_new_file("assets/js/routes/__root.tsx")
-      |> create_new_file("assets/js/routes/index.tsx")
-      |> create_new_file("assets/js/routes/about.tsx")
-      |> create_new_file("assets/js/components/todos.tsx")
-      |> create_new_file("assets/js/api.ts")
-      |> create_new_file("assets/js/index.tsx")
-      |> create_new_file("assets/js/routeTree.gen.ts")
-      |> create_or_replace_file("assets/css/app.css")
-      |> create_or_replace_file("assets/js/app.js")
-      |> create_new_file("compose.yaml")
+    defp create_ingest_controller(igniter, web_module) do
+      clean_web_module = web_module |> to_string() |> String.replace_prefix("Elixir.", "")
+      web_folder = Macro.underscore(clean_web_module)
 
-      # |> create_or_replace_file("lib/web/components/layouts/spa_root.html.heex")
-      # |> Igniter.rm("assets/js/app.js")
-    end
+      controller_path =
+        Path.join(["lib", web_folder, "controllers", "ingest_controller.ex"])
 
-    defp create_new_file(igniter, path) do
-      Igniter.create_new_file(
-        igniter,
-        path,
-        render_template(igniter, path)
-      )
-    end
+      controller_module = "#{clean_web_module}.IngestController"
 
-    defp create_or_replace_file(igniter, path, template_path \\ nil) do
-      contents = render_template(igniter, template_path || path)
+      controller_content = """
+      defmodule #{controller_module} do
+        use #{clean_web_module}, :controller
 
-      igniter
-      |> Igniter.create_or_update_file(
-        path,
-        contents,
-        &Rewrite.Source.update(&1, :content, fn _content -> contents end)
-      )
-    end
-
-    defp render_template(igniter, path) when is_binary(path) do
-      template_contents(
-        path,
-        app_name: app_name(igniter) |> to_string(),
-        web_module: web_module(igniter) |> to_string(),
-        web_dir: web_dir(igniter)
-      )
-    end
-
-    @doc false
-    def template_contents(path, assigns) do
-      template_dir()
-      |> Path.join("#{path}.eex")
-      |> Path.expand(__DIR__)
-      |> EEx.eval_file(assigns: assigns)
-    end
-
-    @doc false
-    def template_dir do
-      :phoenix_sync_fix
-      |> :code.priv_dir()
-      |> Path.join("igniter/phx.sync.tanstack_db")
-    end
-
-    defp js_runner(igniter) do
-      case(igniter.assigns.package_manager) do
-        :pnpm -> :pnpm
-        :npm -> :npx
+        # See https://hexdocs.pm/phoenix_sync/readme.html#write-path-sync
+        # alias Phoenix.Sync.Writer
+        #
+        # def ingest(%{assigns: %{current_user: user}} = conn, %{"mutations" => mutations}) do
+        #   {:ok, txid, _changes} =
+        #     Writer.new()
+        #     |> Writer.allow(
+        #       Todos.Todo,
+        #       accept: [:insert],
+        #       check: &Ingest.check_event(&1, user)
+        #     )
+        #     |> Writer.apply(mutations, Repo, format: Writer.Format.TanstackDB)
+        #
+        #   json(conn, %{txid: txid})
+        # end
       end
-    end
+      """
 
-    defp package_manager(igniter) do
-      igniter.assigns.package_manager
+      Igniter.create_new_file(igniter, controller_path, controller_content, on_exists: :warning)
     end
   end
 else
