@@ -8,7 +8,7 @@ if Code.ensure_loaded?(Igniter) do
     @moduledoc false
 
     @valid_frameworks ["react", "vue", "svelte", "solid"]
-    @valid_bundlers ["vite", "esbuild"]
+    @valid_bundlers ["vite"]
     @valid_presets ["tanstack_db"]
 
     def validate_framework(igniter, nil), do: igniter
@@ -41,7 +41,7 @@ if Code.ensure_loaded?(Igniter) do
       )
     end
 
-    alias PhoenixSynFix.Installer.LandingPage
+    alias PhoenixSyncFix.Installer.LandingPage
 
     @tanstack_template_subdir "igniter/phx.sync.tanstack_db"
 
@@ -372,8 +372,6 @@ if Code.ensure_loaded?(Igniter) do
     # -- JSON helpers --
 
     defp read_json_file(igniter, path) do
-      result = {:missing, nil}
-
       result =
         Igniter.create_or_update_file(igniter, path, "", fn source ->
           parsed =
@@ -510,7 +508,7 @@ if Code.ensure_loaded?(Igniter) do
         |> EEx.eval_file(app_name: app_name)
 
       Igniter.create_or_update_file(igniter, "compose.yaml", rendered <> "\n", fn _source ->
-        Rewrite.Source.from_string!(rendered <> "\n", "compose.yaml")
+        Rewrite.Source.from_string(rendered <> "\n", "compose.yaml")
       end)
     end
 
@@ -522,7 +520,7 @@ if Code.ensure_loaded?(Igniter) do
         |> EEx.eval_file(app_name: app_name)
 
       Igniter.create_or_update_file(igniter, "compose.yaml", rendered <> "\n", fn _source ->
-        Rewrite.Source.from_string!(rendered <> "\n", "compose.yaml")
+        Rewrite.Source.from_string(rendered <> "\n", "compose.yaml")
       end)
     end
 

@@ -39,20 +39,7 @@ if Code.ensure_loaded?(Igniter) do
       create_layout_file(igniter, web_module, "spa_root.html.heex", layout_content)
     end
 
-    def create_spa_root_layout(igniter, web_module, "esbuild", _framework) do
-      layout_content = render_install_template("spa_root_esbuild.html.heex")
-      create_layout_file(igniter, web_module, "spa_root.html.heex", layout_content)
-    end
-
     def create_spa_root_layout(igniter, _web_module, _bundler, _framework), do: igniter
-
-    @doc "Create inertia_root layout from the appropriate template."
-    def create_inertia_root_layout(igniter, web_module, "esbuild", _framework) do
-      layout_content = render_install_template("inertia_root_esbuild.html.heex")
-      create_layout_file(igniter, web_module, "inertia_root.html.heex", layout_content)
-    end
-
-    def create_inertia_root_layout(igniter, _web_module, _bundler, _framework), do: igniter
 
     @doc """
     Create or update the page controller. When `use_spa_layout` is true,
@@ -140,7 +127,7 @@ if Code.ensure_loaded?(Igniter) do
 
     @doc "Create the index.html.heex template (just the mount point div)."
     def create_index_template(igniter, web_module, bundler, _framework)
-        when bundler in ["vite", "esbuild"] do
+        when bundler in ["vite"] do
       clean = clean_module(web_module)
       web_path = Macro.underscore(clean)
 

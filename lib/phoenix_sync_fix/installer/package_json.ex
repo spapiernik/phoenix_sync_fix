@@ -10,7 +10,6 @@ if Code.ensure_loaded?(Igniter) do
     @doc """
     Ensure package.json exists and add framework- and preset-specific dependencies.
     For vite, creates an empty package.json only when missing (phoenix_vite manages Phoenix deps).
-    For esbuild, starts with Phoenix deps.
     """
     def create_package_json(igniter, "vite", framework, preset) do
       igniter
@@ -205,6 +204,8 @@ if Code.ensure_loaded?(Igniter) do
 
       "{\n" <> body <> "\n}"
     end
+    
+    defp encode_pretty_ordered_root(other), do: Jason.encode!(other, pretty: true)
 
     defp indent_multiline_json(json, spaces) when is_binary(json) and is_integer(spaces) and spaces >= 0 do
       indent = String.duplicate(" ", spaces)
@@ -218,8 +219,6 @@ if Code.ensure_loaded?(Igniter) do
       end)
       |> Enum.join("\n")
     end
-
-    defp encode_pretty_ordered_root(other), do: Jason.encode!(other, pretty: true)
 
     defp add_preset_deps(igniter, preset, framework, bundler) do
       deps = get_preset_deps(preset, framework, bundler)
