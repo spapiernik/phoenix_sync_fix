@@ -487,6 +487,10 @@ if Code.ensure_loaded?(Igniter) do
         template_path("assets/js/routes"),
         "assets/js/routes"
       )
+      |> copy_file_from_template(
+        template_path("Caddyfile.eex"),
+        "Caddyfile"
+      )
       |> copy_compose_yaml(sync_mode)
     end
 

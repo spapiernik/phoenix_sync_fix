@@ -85,10 +85,8 @@ if Code.ensure_loaded?(Igniter) do
       igniter =
         igniter
         |> Igniter.Project.IgniterConfig.add_extension(Igniter.Extensions.Phoenix)
-        # |> Igniter.Project.Formatter.import_dep(:ash_typescript)
-        # |> add_ash_typescript_config()
-        # |> create_rpc_controller(app_name, web_module)
-        # |> add_rpc_routes(web_module)
+        |> maybe_add_caddyfile(preset)
+        |> maybe_add_ingest_flow(preset, web_module)
         |> Vite.maybe_fix_runtime_manifest_cache(bundler, app_name)
 
       # # Framework-specific setup
@@ -365,6 +363,113 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp maybe_update_router_for_tanstack_db(igniter, _preset, _web_module), do: igniter
+
+    defp maybe_add_caddyfile(igniter, "tanstack_db") do
+      rendered =
+        :phoenix_sync_fix
+        |> :code.priv_dir()
+        |> Path.join("igniter/phx.sync.tanstack_db/Caddyfile.eex")
+        |> EEx.eval_file([])
+
+      Igniter.create_or_update_file(igniter, "Caddyfile", rendered <> "\n", fn source ->
+        if source.content == rendered <> "\n" do
+          source
+        else
+          Rewrite.Source.update(source, :content, rendered <> "\n")
+        end
+      end)
+    end
+
+    defp maybe_add_caddyfile(igniter, _preset), do: igniter
+
+    defp maybe_add_ingest_flow(igniter, "tanstack_db", web_module) do
+      igniter
+      |> add_ingest_scope(web_module)
+      |> create_ingest_controller(web_module)
+    end
+
+    defp maybe_add_ingest_flow(igniter, _preset, _web_module), do: igniter
+
+    defp add_ingest_scope(igniter, web_module) do
+      {igniter, router_module} = Igniter.Libs.Phoenix.select_router(igniter)
+
+      case Igniter.Project.Module.find_module(igniter, router_module) do
+        {:ok, {igniter, source, _zipper}} ->
+          router_content = Rewrite.Source.get(source, :content)
+
+          if String.contains?(router_content, "scope \"/ingest\"") do
+            igniter
+          else
+            Igniter.update_file(igniter, Rewrite.Source.get(source, :path), fn src ->
+              content = src.content
+
+              ingest_scope = """
+  scope "/ingest", #{inspect(web_module)} do
+    pipe_through :api
+
+    # example router for accepting optimistic writes from the client
+    # See: https://tanstack.com/db/latest/docs/overview#making-optimistic-mutations
+    # post "/mutations", Controllers.IngestController, :ingest
+  end
+
+"""
+
+              updated =
+                if String.contains?(content, ~s|scope "/ingest"|) do
+                  content
+                else
+                  String.replace(content, ~r/\nend\s*$/, "\n" <> ingest_scope <> "end\n")
+                end
+
+              if updated == content do
+                src
+              else
+                Rewrite.Source.update(src, :content, updated)
+              end
+            end)
+          end
+
+        {:error, igniter} ->
+          Igniter.add_warning(
+            igniter,
+            "Could not find router. Please manually add the /ingest scope for TanStack DB."
+          )
+      end
+    end
+
+    defp create_ingest_controller(igniter, web_module) do
+      clean_web_module = web_module |> to_string() |> String.replace_prefix("Elixir.", "")
+      web_folder = Macro.underscore(clean_web_module)
+
+      controller_path =
+        Path.join(["lib", web_folder, "controllers", "ingest_controller.ex"])
+
+      controller_module = "#{clean_web_module}.IngestController"
+
+      controller_content = """
+      defmodule #{controller_module} do
+        use #{clean_web_module}, :controller
+
+        # See https://hexdocs.pm/phoenix_sync/readme.html#write-path-sync
+        # alias Phoenix.Sync.Writer
+        #
+        # def ingest(%{assigns: %{current_user: user}} = conn, %{"mutations" => mutations}) do
+        #   {:ok, txid, _changes} =
+        #     Writer.new()
+        #     |> Writer.allow(
+        #       Todos.Todo,
+        #       accept: [:insert],
+        #       check: &Ingest.check_event(&1, user)
+        #     )
+        #     |> Writer.apply(mutations, Repo, format: Writer.Format.TanstackDB)
+        #
+        #   json(conn, %{txid: txid})
+        # end
+      end
+      """
+
+      Igniter.create_new_file(igniter, controller_path, controller_content, on_exists: :warning)
+    end
 
     # -- Core setup --
 
