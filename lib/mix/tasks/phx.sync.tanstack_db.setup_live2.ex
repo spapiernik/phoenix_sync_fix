@@ -266,6 +266,7 @@ if Code.ensure_loaded?(Igniter) do
         use_spa_layout: bundler in ["vite", "esbuild"]
       )
       |> Layout.create_index_template(web_module, bundler, framework)
+      |> maybe_update_router_for_tanstack_db(preset, web_module)
       # |> Layout.add_page_index_route(web_module)
     end
 
@@ -288,6 +289,82 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp setup_bundler(igniter, _app_name, _bundler, _use_bun, _framework), do: igniter
+
+    defp maybe_update_router_for_tanstack_db(igniter, "tanstack_db", web_module) do
+      {igniter, router_module} = Igniter.Libs.Phoenix.select_router(igniter)
+
+      case Igniter.Project.Module.find_module(igniter, router_module) do
+        {:ok, {igniter, source, _zipper}} ->
+          router_content = Rewrite.Source.get(source, :content)
+
+          has_home_root? =
+            String.contains?(router_content, "get \"/\", PageController, :home")
+
+          has_home_lv? =
+            String.contains?(router_content, "get \"/lv\", PageController, :home")
+
+          has_catch_all? =
+            String.contains?(router_content, "get \"/*page\", PageController, :index")
+
+          {igniter, has_home_lv_after_update?} =
+            if has_home_root? do
+              updated_igniter =
+                Igniter.update_file(igniter, Rewrite.Source.get(source, :path), fn source ->
+                  updated =
+                    source.content
+                    |> String.replace(
+                      "get \"/\", PageController, :home",
+                      "get \"/lv\", PageController, :home"
+                    )
+
+                  if updated == source.content do
+                    source
+                  else
+                    Rewrite.Source.update(source, :content, updated)
+                  end
+                end)
+
+              {updated_igniter, true}
+            else
+              {igniter, has_home_lv?}
+            end
+
+          cond do
+            has_home_lv_after_update? ->
+              igniter
+
+            true ->
+              Igniter.Libs.Phoenix.append_to_scope(
+                igniter,
+                "/",
+                "  get \"/lv\", PageController, :home\n",
+                arg2: web_module,
+                placement: :after
+              )
+          end
+          |> then(fn igniter ->
+            if has_catch_all? do
+              igniter
+            else
+              Igniter.Libs.Phoenix.append_to_scope(
+                igniter,
+                "/",
+                "  get \"/*page\", PageController, :index\n",
+                arg2: web_module,
+                placement: :after
+              )
+            end
+          end)
+
+        {:error, igniter} ->
+          Igniter.add_warning(
+            igniter,
+            "Could not find router. Please manually update routes for TanStack DB setup."
+          )
+      end
+    end
+
+    defp maybe_update_router_for_tanstack_db(igniter, _preset, _web_module), do: igniter
 
     # -- Core setup --
 
