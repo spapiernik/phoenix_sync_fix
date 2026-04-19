@@ -537,7 +537,11 @@ if Code.ensure_loaded?(Igniter) do
       source_dir
       |> list_files_recursively()
       |> Enum.reduce(igniter, fn source_file, acc ->
-        relative_path = Path.relative_to(source_file, source_dir)
+        relative_path =
+          source_file
+          |> Path.relative_to(source_dir)
+          |> strip_eex_extension()
+
         destination_path = Path.join(destination_dir, relative_path)
         copy_file_from_template(acc, source_file, destination_path)
       end)
@@ -554,6 +558,14 @@ if Code.ensure_loaded?(Igniter) do
           [path]
         end
       end)
+    end
+
+    defp strip_eex_extension(path) do
+      if String.ends_with?(path, ".eex") do
+        String.replace_suffix(path, ".eex", "")
+      else
+        path
+      end
     end
 
     defp template_path(relative_path) do
