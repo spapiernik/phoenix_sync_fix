@@ -19,35 +19,6 @@ if Code.ensure_loaded?(Igniter) do
       |> add_preset_deps(preset, framework, "vite")
     end
 
-    def create_package_json(igniter, _bundler, framework, preset) do
-      base_package_json =
-        %{
-          "dependencies" => %{
-            "phoenix" => "file:../deps/phoenix",
-            "phoenix_html" => "file:../deps/phoenix_html",
-            "phoenix_live_view" => "file:../deps/phoenix_live_view",
-            "topbar" => "^3.0.0"
-          }
-        }
-        |> encode_pretty_json()
-
-      igniter
-      |> Igniter.create_or_update_file("assets/package.json", base_package_json, fn source ->
-        source
-      end)
-      |> add_package_metadata_and_scripts("esbuild")
-      |> add_framework_deps(framework, "esbuild")
-      |> add_preset_deps(preset, framework, "esbuild")
-      |> update_vendor_imports()
-    end
-
-    @doc "Add esbuild as an npm dependency (for plugin-based builds that bypass the Elixir esbuild wrapper)."
-    def add_esbuild_npm_dep(igniter) do
-      update_package_json(igniter, fn package_json ->
-        merge_package_section(package_json, "devDependencies", %{"esbuild" => "^0.24.0"})
-      end)
-    end
-
     @doc "Update package.json by applying an updater function to the parsed JSON."
     def update_package_json(igniter, updater) do
       Igniter.update_file(igniter, "assets/package.json", fn source ->
@@ -230,21 +201,6 @@ if Code.ensure_loaded?(Igniter) do
       end)
     end
 
-    defp update_vendor_imports(igniter) do
-      igniter
-      |> Igniter.update_file("assets/js/app.js", fn source ->
-        Rewrite.Source.update(source, :content, fn content ->
-          String.replace(content, "../vendor/topbar", "topbar")
-        end)
-      end)
-      |> delete_vendor_files()
-    end
-
-    defp delete_vendor_files(igniter) do
-      igniter
-      |> Igniter.rm("assets/vendor/topbar.js")
-    end
-
     # Framework deps -- only the framework core + bundler plugin. No TanStack, Prism, DaisyUI.
 
     defp get_framework_deps("react", "vite") do
@@ -258,27 +214,10 @@ if Code.ensure_loaded?(Igniter) do
       }
     end
 
-    defp get_framework_deps("react", _bundler) do
-      %{
-        dependencies: %{"react" => "^19.1.1", "react-dom" => "^19.1.1"},
-        dev_dependencies: %{
-          "@types/react" => "^19.1.13",
-          "@types/react-dom" => "^19.1.9"
-        }
-      }
-    end
-
     defp get_framework_deps("vue", "vite") do
       %{
         dependencies: %{"vue" => "^3.5.16"},
         dev_dependencies: %{"@vitejs/plugin-vue" => "^5.2.4"}
-      }
-    end
-
-    defp get_framework_deps("vue", _bundler) do
-      %{
-        dependencies: %{"vue" => "^3.5.16"},
-        dev_dependencies: %{"esbuild-plugin-vue3" => "^0.4.2"}
       }
     end
 
@@ -289,24 +228,10 @@ if Code.ensure_loaded?(Igniter) do
       }
     end
 
-    defp get_framework_deps("svelte", _bundler) do
-      %{
-        dependencies: %{"svelte" => "^5.33.0"},
-        dev_dependencies: %{"esbuild-svelte" => "^0.9.3"}
-      }
-    end
-
     defp get_framework_deps("solid", "vite") do
       %{
         dependencies: %{"solid-js" => "^1.9.9"},
         dev_dependencies: %{"vite-plugin-solid" => "^2.11.9"}
-      }
-    end
-
-    defp get_framework_deps("solid", _bundler) do
-      %{
-        dependencies: %{"solid-js" => "^1.9.9"},
-        dev_dependencies: %{"esbuild-plugin-solid" => "^0.6.0"}
       }
     end
 

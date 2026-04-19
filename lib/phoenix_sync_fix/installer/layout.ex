@@ -7,10 +7,10 @@ if Code.ensure_loaded?(Igniter) do
   defmodule PhoenixSyncFix.Installer.Layout do
     @moduledoc false
 
-    alias PhoenixSyncFix.Installer.Esbuild
+    alias PhoenixSyncFix.Installer.Vite
 
     @doc "Create spa_root layout from the appropriate template."
-    def create_spa_root_layout(igniter, web_module, "vite", framework, "tanstack_db")
+    def create_spa_root_layout(igniter, web_module, "vite", framework, preset = "tanstack_db")
         when framework == "react" do
       app_name = Igniter.Project.Application.app_name(igniter)
       clean_web_module = clean_module(web_module)
@@ -19,13 +19,13 @@ if Code.ensure_loaded?(Igniter) do
         render_install_template("spa_root.html.heex", %{
           "__WEB_MODULE__" => clean_web_module,
           "__APP_NAME__" => to_string(app_name),
-          "__ENTRY_FILE__" => Esbuild.get_entry_file(framework)
+          "__ENTRY_FILE__" => Vite.spa_entry_for(framework, preset)
         })
 
       create_layout_file(igniter, web_module, "spa_root.html.heex", layout_content)
     end
 
-    def create_spa_root_layout(igniter, web_module, "vite", framework) do
+    def create_spa_root_layout(igniter, web_module, "vite", framework, preset) do
       app_name = Igniter.Project.Application.app_name(igniter)
       clean_web_module = clean_module(web_module)
 
@@ -33,7 +33,7 @@ if Code.ensure_loaded?(Igniter) do
         render_install_template("spa_root_vite.html.heex", %{
           "__WEB_MODULE__" => clean_web_module,
           "__APP_NAME__" => to_string(app_name),
-          "__ENTRY_FILE__" => Esbuild.get_entry_file(framework)
+          "__ENTRY_FILE__" => Vite.spa_entry_for(framework, preset)
         })
 
       create_layout_file(igniter, web_module, "spa_root.html.heex", layout_content)

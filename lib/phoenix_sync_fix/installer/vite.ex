@@ -296,11 +296,11 @@ if Code.ensure_loaded?(Igniter) do
 
     defp plugins_for(_framework, _preset), do: ["tailwindcss()", phoenix_vite_plugin_call()]
 
-    defp spa_entry_for("vue", _preset), do: "js/index.ts"
-    defp spa_entry_for("svelte", _preset), do: "js/index.ts"
-    defp spa_entry_for("react", _preset), do: "js/index.tsx"
-    defp spa_entry_for("solid", _preset), do: "js/index.tsx"
-    defp spa_entry_for(_framework, _preset), do: "js/index.tsx"
+    def spa_entry_for("vue", _preset), do: "js/index.ts"
+    def spa_entry_for("svelte", _preset), do: "js/index.ts"
+    def spa_entry_for("react", _preset), do: "js/index.tsx"
+    def spa_entry_for("solid", _preset), do: "js/index.tsx"
+    def spa_entry_for(_framework, _preset), do: "js/index.tsx"
 
     defp phoenix_vite_plugin_call do
       """

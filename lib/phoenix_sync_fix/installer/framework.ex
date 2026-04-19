@@ -41,8 +41,6 @@ if Code.ensure_loaded?(Igniter) do
       )
     end
 
-    alias PhoenixSyncFix.Installer.LandingPage
-
     @tanstack_template_subdir "igniter/phx.sync.tanstack_db"
 
     @doc "Create the framework's entry point file (index.tsx / index.ts + App component)."
@@ -76,110 +74,6 @@ if Code.ensure_loaded?(Igniter) do
       igniter
       |> Igniter.create_new_file("assets/js/index.tsx", content, on_exists: :warning)
       |> install_tanstack_db_assets()
-    end
-
-    def create_index_page(igniter, "react", nil) do
-      page_body = LandingPage.page_jsx()
-
-      content = """
-      import React, { useEffect } from "react";
-      import { createRoot } from "react-dom/client";
-      import { initLandingPage } from "./animation";
-
-      function App() {
-        useEffect(() => {
-          const el = document.getElementById("animation-container");
-          if (el) return initLandingPage(el);
-        }, []);
-
-        return (
-      #{page_body}
-        );
-      }
-
-      createRoot(document.getElementById("app")!).render(
-        <React.StrictMode>
-          <App />
-        </React.StrictMode>,
-      );
-      """
-
-      igniter
-      |> write_animation_module()
-      |> Igniter.create_new_file("assets/js/index.tsx", content, on_exists: :warning)
-    end
-
-    def create_index_page(igniter, "vue", nil) do
-      {script_content, template_content} = LandingPage.page_vue()
-      vue_component = script_content <> "\n" <> template_content
-
-      vue_index = """
-      import { createApp } from "vue";
-      import App from "./App.vue";
-
-      createApp(App).mount("#app");
-      """
-
-      igniter
-      |> write_animation_module()
-      |> Igniter.create_new_file("assets/js/App.vue", vue_component, on_exists: :warning)
-      |> Igniter.create_new_file("assets/js/index.ts", vue_index, on_exists: :warning)
-    end
-
-    def create_index_page(igniter, "svelte", nil) do
-      {script_content, template_content} = LandingPage.page_svelte()
-      svelte_component = script_content <> "\n" <> template_content
-
-      svelte_index = """
-      import App from "./App.svelte";
-      import { mount } from "svelte";
-
-      mount(App, { target: document.getElementById("app")! });
-      """
-
-      igniter
-      |> write_animation_module()
-      |> Igniter.create_new_file("assets/js/App.svelte", svelte_component, on_exists: :warning)
-      |> Igniter.create_new_file("assets/js/index.ts", svelte_index, on_exists: :warning)
-    end
-
-    def create_index_page(igniter, "solid", nil) do
-      page_body = LandingPage.page_jsx()
-
-      content = """
-      import { onMount, onCleanup } from "solid-js";
-      import { render } from "solid-js/web";
-      import { initLandingPage } from "./animation";
-
-      function App() {
-        onMount(() => {
-          const el = document.getElementById("animation-container");
-          if (el) {
-            const cleanup = initLandingPage(el);
-            onCleanup(cleanup);
-          }
-        });
-
-        return (
-      #{page_body}
-        );
-      }
-
-      render(() => <App />, document.getElementById("app")!);
-      """
-
-      igniter
-      |> write_animation_module()
-      |> Igniter.create_new_file("assets/js/index.tsx", content, on_exists: :warning)
-    end
-
-    defp write_animation_module(igniter) do
-      Igniter.create_new_file(
-        igniter,
-        "assets/js/animation.ts",
-        LandingPage.animation_module(),
-        on_exists: :warning
-      )
     end
 
     @doc """
