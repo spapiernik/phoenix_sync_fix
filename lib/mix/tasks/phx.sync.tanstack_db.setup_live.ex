@@ -293,66 +293,11 @@ if Code.ensure_loaded?(Igniter) do
 
       case Igniter.Project.Module.find_module(igniter, router_module) do
         {:ok, {igniter, source, _zipper}} ->
-          router_content = Rewrite.Source.get(source, :content)
+          router_path = Rewrite.Source.get(source, :path)
 
-          has_home_root? =
-            String.contains?(router_content, "get \"/\", PageController, :home")
-
-          has_home_lv? =
-            String.contains?(router_content, "get \"/lv\", PageController, :home")
-
-          has_catch_all? =
-            String.contains?(router_content, "get \"/*page\", PageController, :index")
-
-          {igniter, has_home_lv_after_update?} =
-            if has_home_root? do
-              updated_igniter =
-                Igniter.update_file(igniter, Rewrite.Source.get(source, :path), fn source ->
-                  updated =
-                    source.content
-                    |> String.replace(
-                      "get \"/\", PageController, :home",
-                      "get \"/lv\", PageController, :home"
-                    )
-
-                  if updated == source.content do
-                    source
-                  else
-                    Rewrite.Source.update(source, :content, updated)
-                  end
-                end)
-
-              {updated_igniter, true}
-            else
-              {igniter, has_home_lv?}
-            end
-
-          cond do
-            has_home_lv_after_update? ->
-              igniter
-
-            true ->
-              Igniter.Libs.Phoenix.append_to_scope(
-                igniter,
-                "/",
-                "  get \"/lv\", PageController, :home\n",
-                arg2: web_module,
-                placement: :after
-              )
-          end
-          |> then(fn igniter ->
-            if has_catch_all? do
-              igniter
-            else
-              Igniter.Libs.Phoenix.append_to_scope(
-                igniter,
-                "/",
-                "  get \"/*page\", PageController, :index\n",
-                arg2: web_module,
-                placement: :after
-              )
-            end
-          end)
+          igniter
+          |> ensure_lv_route(router_path, web_module)
+          |> ensure_catch_all_route_at_end(router_path, web_module)
 
         {:error, igniter} ->
           Igniter.add_warning(
@@ -360,6 +305,88 @@ if Code.ensure_loaded?(Igniter) do
             "Could not find router. Please manually update routes for TanStack DB setup."
           )
       end
+    end
+
+    defp ensure_lv_route(igniter, router_path, web_module) do
+      Igniter.update_file(igniter, router_path, fn source ->
+        content = source.content
+
+        updated =
+          cond do
+            String.contains?(content, "get \"/lv\", PageController, :home") ->
+              content
+
+            String.contains?(content, "get \"/\", PageController, :home") ->
+              String.replace(
+                content,
+                "get \"/\", PageController, :home",
+                "get \"/lv\", PageController, :home"
+              )
+
+            true ->
+              insert_scope_before_router_end(
+                content,
+                """
+                  scope "/", #{inspect(web_module)} do
+                    pipe_through :browser
+
+                    get "/lv", PageController, :home
+                  end
+                """
+              )
+          end
+
+        if updated == content do
+          source
+        else
+          Rewrite.Source.update(source, :content, updated)
+        end
+      end)
+    end
+
+    defp ensure_catch_all_route_at_end(igniter, router_path, web_module) do
+      Igniter.update_file(igniter, router_path, fn source ->
+        content = source.content
+
+        catch_all_line = ~s|get "/*page", PageController, :index|
+
+        content_without_existing_catch_all =
+          String.replace(
+            content,
+            ~r/\n[ \t]*get "\/\*page", PageController, :index[ \t]*\n?/,
+            "\n"
+          )
+
+        updated =
+          if String.contains?(content, catch_all_line) or
+               String.contains?(content_without_existing_catch_all, ~s|scope "/", #{inspect(web_module)} do|) do
+            insert_scope_before_router_end(
+              content_without_existing_catch_all,
+              """
+  scope "/", #{inspect(web_module)} do
+    pipe_through :browser
+    
+    # Forward all routes onto the root layout since tanstack router does our routing
+    get "/*page", PageController, :index
+  end
+"""
+            )
+          else
+            content
+          end
+
+        if updated == content do
+          source
+        else
+          Rewrite.Source.update(source, :content, updated)
+        end
+      end)
+    end
+
+    defp insert_scope_before_router_end(content, scope_block) do
+      normalized_scope = String.trim_trailing(scope_block)
+
+      String.replace(content, ~r/\n+\s*end\s*$/, "\n\n" <> normalized_scope <> "\nend\n")
     end
 
     defp maybe_update_router_for_tanstack_db(igniter, _preset, _web_module), do: igniter
@@ -411,7 +438,6 @@ if Code.ensure_loaded?(Igniter) do
     # See: https://tanstack.com/db/latest/docs/overview#making-optimistic-mutations
     # post "/mutations", Controllers.IngestController, :ingest
   end
-
 """
 
               updated =
