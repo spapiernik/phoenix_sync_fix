@@ -5,15 +5,57 @@
 
 defmodule Mix.Tasks.Phx.Sync.TanstackDb.SetupLive.Docs do
   @moduledoc false
-  
+
   @spec short_doc() :: String.t()
-  def short_doc(), do: ""
+  def short_doc do
+    "Convert a Phoenix application to use a Vite + Tanstack DB based frontend"
+  end
 
   @spec example() :: String.t()
-  def example(), do: ""
+  def example do
+    "mix phx.sync.tanstack_db.setup"
+  end
 
   @spec long_doc() :: String.t()
-  def long_doc(), do: ""
+  def long_doc do
+    """
+    #{short_doc()}
+
+    This is a very invasive task that does the following:
+
+    - Removes `esbuild` with `vite` and removes the Elixir integration with
+      tailwindcss
+
+    - Adds a `package.json` with the required dependencies for `@tanstack/db`,
+      `@tanstack/router`, `react` and `tailwind`
+
+    - Drops in some example routes, schemas, collections and mutation code
+
+    - Replaces the default `root.html.heex` layout to one suitable for a
+      react-based SPA
+
+    For this reason we recommend only running this on a fresh Phoenix project
+    (with `Phoenix.Sync` installed).
+
+    ## Example
+
+    ```sh
+    # install igniter.new
+    mix archive.install hex igniter_new
+
+    # create a new phoenix application and install phoenix_sync in `embedded` mode
+    mix igniter.new my_app --install phoenix_sync --with phx.new --sync-mode embedded
+
+    # setup my_app to use tanstack db
+    #{example()}
+    ```
+
+    ## Options
+
+    * `--sync-pnpm` - Use `pnpm` as package manager if available (default)
+    * `--no-sync-pnpm` - Use `npm` as package manager even if `pnpm` is installed
+    """
+  end
 end
 
 
@@ -37,6 +79,7 @@ if Code.ensure_loaded?(Igniter) do
       %Igniter.Mix.Task.Info{
         group: :phoenix_sync_fix,
         installs: [],
+        example: __MODULE__.Docs.example(),
         schema: [],
         defaults: [],
         composes: [],
