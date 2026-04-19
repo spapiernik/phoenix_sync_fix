@@ -1,7 +1,7 @@
-# Adapted from https://github.com/electric-sql/phoenix_sync
-# Licensed under the Apache License 2.0
+# SPDX-FileCopyrightText: 2025 ash_typescript contributors <https://github.com/ash-project/ash_typescript/graphs/contributors>
+# SPDX-FileCopyrightText: 2026 Santiago Papiernik <https://github.com/spapiernik/phoenix_sync_fix/graphs/contributors>
 #
-# Modified
+# SPDX-License-Identifier: MIT
 
 defmodule Mix.Tasks.Phx.Sync.TanstackDb.SetupLive2.Docs do
   @moduledoc false
