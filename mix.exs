@@ -8,7 +8,7 @@ defmodule PhoenixSyncFix.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "Phoenix.Sync fork for debugging mix igniter.install",
+      description: "A fix for Phoenix.Sync",
       package: [
         licenses: ["Apache-2.0"],
         links: %{
