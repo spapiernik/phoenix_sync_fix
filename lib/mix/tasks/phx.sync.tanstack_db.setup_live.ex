@@ -5,15 +5,53 @@
 
 defmodule Mix.Tasks.Phx.Sync.TanstackDb.SetupLive.Docs do
   @moduledoc false
-  
+
   @spec short_doc() :: String.t()
-  def short_doc(), do: ""
+  def short_doc do
+    "Convert a Phoenix application to use a Vite + Tanstack DB based frontend"
+  end
 
   @spec example() :: String.t()
-  def example(), do: ""
+  def example do
+    "mix phx.sync.tanstack_db.setup_live"
+  end
 
   @spec long_doc() :: String.t()
-  def long_doc(), do: ""
+  def long_doc do
+    """
+    #{short_doc()}
+
+    This task applies the following project updates:
+
+    - Removes `esbuild` with `vite`
+
+    - Adds a `package.json` with the required dependencies for `@tanstack/db`,
+      `@tanstack/router`, `react` and `tailwind`
+
+    - Drops in some example routes, schemas, collections and mutation code
+
+    - Adds `spa_root.html.heex` layout, suitable for a react-based SPA
+
+    ## Example
+
+    ```sh
+    # install igniter.new
+    mix archive.install hex igniter_new
+
+    # create a new phoenix application
+    mix phx.new my_app
+    
+    # install phoenix_sync in `embedded` mode
+    mix igniter.install phoenix_sync_fix --sync-mode embedded --no-sync-sandbox
+    
+    # install phoenix_vite
+    mix igniter.install phoenix_vite --bun
+
+    # setup my_app to use tanstack db (igniter must be added to the project for this step)
+    #{example()}
+    ```
+    """
+  end
 end
 
 
